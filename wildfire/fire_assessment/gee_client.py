@@ -1,4 +1,4 @@
-# gee_authenticator.py
+# gee_client.py
 import json
 import os
 from tempfile import NamedTemporaryFile
@@ -7,7 +7,7 @@ import ee
 from dotenv import load_dotenv 
 
 
-class GEEAuthenticator:
+class GEEClient:
     def __init__(self):
         """
         Initializes the connection to Google Earth Engine using the credentials
