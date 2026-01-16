@@ -58,15 +58,57 @@ After adding the `.env` file and your GeoJSON polygon:
 
 ```bash
 python3 -m wildfire_analyser.client \
-  --roi polygons/aoi.geojson \
-  --start-date 2023-07-31 \
-  --end-date 2023-08-30 \
-  --days-before-after 1
+   --roi polygons/canakkale_aoi_1.geojson \
+   --start-date 2023-07-01 \
+   --end-date 2023-07-21 \
+   --deliverables-all \
+   --days-before-after 1
 ```
 
-This will start the analysis process, generate the configured deliverables, and save the output files in the current directory.
+Possible options for --deliverables are:
+   RGB_PRE_FIRE,
+   RGB_POST_FIRE,
+   NBR_PRE_FIRE,
+   NBR_POST_FIRE,
+   DNBR,
+   RBR,
+   BURN_SEVERITY_MAP,
+   RGB_PRE_FIRE_VISUAL,
+   RGB_POST_FIRE_VISUAL,
+   DNBR_VISUAL,
+   BURN_SEVERITY_VISUAL,
+   BURNED_AREA_STATISTICS,
 
+This will start the analysis process, generate visual thumbnail links for use by the frontend, and save the scientific GeoTIFF images to the GCP bucket.
+All links will be displayed in the terminal.
 
+for help, type:
+
+```bash
+python3 -m wildfire_analyser.client --help
+```
+
+You should see something like this:
+
+```bash
+usage: client.py [-h] --roi ROI --start-date START_DATE --end-date END_DATE
+                 [--deliverables DELIVERABLES [DELIVERABLES ...]] [--deliverables-all]
+                 [--days-before-after DAYS_BEFORE_AFTER]
+
+Post-fire assessment using Google Earth Engine
+
+options:
+  -h, --help            show this help message and exit
+  --roi ROI             Path to ROI GeoJSON file
+  --start-date START_DATE
+                        Start date (pre-fire) in YYYY-MM-DD format
+  --end-date END_DATE   End date (post-fire) in YYYY-MM-DD format
+  --deliverables DELIVERABLES [DELIVERABLES ...]
+                        List of deliverables to generate. Example: --deliverables RGB_PRE_FIRE DNBR
+  --deliverables-all    Generate all available deliverables
+  --days-before-after DAYS_BEFORE_AFTER
+                        Number of days before and after the event date to search imagery (default: 30)
+```
 
 ## Setup Instructions for Developers
 
@@ -102,7 +144,12 @@ pip install -r requirements.txt
 6. **Run the sample client application**
 
 ```bash
-python3 -m wildfire_analyser.client
+python3 -m wildfire_analyser.client \
+   --roi polygons/canakkale_aoi_1.geojson \
+   --start-date 2023-07-01 \
+   --end-date 2023-07-21 \
+   --deliverables-all \
+   --days-before-after 1
 ```
 
 ## Useful Commands
@@ -113,8 +160,10 @@ python3 -m wildfire_analyser.client
 deactivate
 ```
 
+* **Build a new PyPi lib and publish **:
 
-
+```bash
 rm -rf dist/*
 python -m build
 twine upload dist/*
+```
