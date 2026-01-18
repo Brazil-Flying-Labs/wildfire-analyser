@@ -334,13 +334,12 @@ def compute_dndvi_area_statistics(context):
         raise RuntimeError("DNDVI not available")
 
     severity = (
-        ee.Image(0)
-        .where(dndvi.gte(0.10).And(dndvi.lt(0.20)), 1)
-        .where(dndvi.gte(0.20).And(dndvi.lt(0.33)), 2)
-        .where(dndvi.gte(0.33).And(dndvi.lt(0.44)), 3)
-        .where(dndvi.gte(0.45), 4)
-        .rename("severity")
-        .toInt8()
+        ee.Image(0)  # Unburned: dNDVI < 0.07
+        .where(dndvi.gte(0.07).And(dndvi.lt(0.10)), 1)   # Low
+        .where(dndvi.gte(0.10).And(dndvi.lt(0.20)), 1)  # Low
+        .where(dndvi.gte(0.20).And(dndvi.lt(0.33)), 2)  # Moderate
+        .where(dndvi.gte(0.33).And(dndvi.lt(0.44)), 3)  # High
+        .where(dndvi.gte(0.45), 4)                      # Very High
     )
 
     return compute_area_stats(severity, roi)

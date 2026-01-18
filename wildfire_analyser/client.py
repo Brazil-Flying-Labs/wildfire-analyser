@@ -50,14 +50,14 @@ PAPER_PRESETS = {
         ],
         "runs": [
             {
-                "name": "Area 1 – July Fire",
+                "name": "Area_1_July_Fire",
                 "roi": "polygons/canakkale_aoi_1.geojson",
                 "start_date": "2023-07-01",
                 "end_date": "2023-07-21",
                 "days_before_after": 1,
             },
             {
-                "name": "Area 2 – August Fire",
+                "name": "Area_2_August_Fire",
                 "roi": "polygons/canakkale_aoi_2.geojson",
                 "start_date": "2023-07-31",
                 "end_date": "2023-08-30",
@@ -135,6 +135,38 @@ PAPER_TABLE_7_STATS = {
         },
     },
 }
+
+def compare_with_paper_table_7(computed: dict, reference: dict):
+    """
+    Compare computed area statistics with Table 7 reference values.
+
+    Percent error is calculated relative to TOTAL AREA (paper),
+    not to the individual class area.
+    """
+    result = {}
+
+    total_area = reference.get("Total Area")
+    if not total_area or total_area <= 0:
+        raise RuntimeError("Paper reference Total Area not found or invalid")
+
+    for cls, values in computed.items():
+        if cls not in reference:
+            continue
+
+        ref_area = reference[cls]
+        comp_area = values["area_ha"]
+
+        abs_error = comp_area - ref_area
+        pct_error = (abs_error / total_area) * 100
+
+        result[cls] = {
+            **values,
+            "paper_area_ha": ref_area,
+            "abs_error_ha": round(abs_error, 2),
+            "percent_error": round(pct_error, 3),
+        }
+
+    return result
 
 # ─────────────────────────────
 # Main
@@ -228,14 +260,38 @@ def main():
 
                 logger.info("Statistics:")
                 for stat_name, stat_value in result["statistics"].items():
+                    paper_ref = (
+                        PAPER_TABLE_7_STATS
+                        .get(cfg["name"], {})
+                        .get(stat_name)
+                    )
+
+                    if paper_ref:
+                        stat_value = compare_with_paper_table_7(stat_value, paper_ref)
+
                     logger.info("  %s:", stat_name)
+
                     for cls, values in stat_value.items():
-                        logger.info(
-                            "    %-20s | Area (ha): %8.2f | Ratio (%%): %6.2f",
-                            cls,
-                            values["area_ha"],
-                            values["ratio_percent"],
-                        )
+                        if "abs_error_ha" in values:
+                            logger.info(
+                                "    %-20s | "
+                                "Calc (ha): %8.2f | "
+                                "Paper (ha): %8.2f | "
+                                "Abs Err (ha): %7.2f | "
+                                "Err (%%): %6.2f",
+                                cls,
+                                values["area_ha"],
+                                values["paper_area_ha"],
+                                values["abs_error_ha"],
+                                values["percent_error"],
+                            )
+                        else:
+                            logger.info(
+                                "    %-20s | Area (ha): %8.2f | Ratio (%%): %6.2f",
+                                cls,
+                                values["area_ha"],
+                                values["ratio_percent"],
+                            )
 
             return  # ⬅️ IMPORTANT: stop execution here
 
