@@ -99,7 +99,7 @@ Keep the service account email handy—we will use it to assign bucket permissio
    - **Bucket name**: e.g., `post-fire-assessment-data`  
      (must be globally unique)
    - **Region**: choose as appropriate (e.g., `us-central1`)
-   - **Storage class**: Standard (default)
+   - **Storage class**: Nearline (default)
 
 4. Leave other settings as default unless you have specific requirements.
 
@@ -131,3 +131,15 @@ Allows creating/uploading files, but not deleting or listing everything.
 6. Click **Save**
 
 At this point, your service account can write to the bucket.
+
+## 7. LifeCycle
+1. In the left menu, click Lifecycle
+(Sometimes under “Lifecycle rules” or “Object lifecycle”)
+2. Click “Add a rule”
+3. Choose “Delete object” as the action
+4. Choose the condition:
+5. Select “Age”
+   Set Age = 1 day
+   (This means GCS will delete any object older than 24 hours.)
+   Leave the other conditions empty unless needed.
+6. Click Create to save the rule.
