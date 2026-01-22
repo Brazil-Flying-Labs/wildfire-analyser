@@ -29,8 +29,8 @@ Minor numerical differences may occur due to cloud masking, spatial sampling, an
 Follow the steps below to install and test `wildfire-analyser` inside an isolated environment:
 
 ```bash
-mkdir /tmp/test
-cd /tmp/test
+mkdir test
+cd test
 
 python3 -m venv venv
 source venv/bin/activate
