@@ -176,7 +176,7 @@ python3 -m wildfire_analyser.cli \
    --roi polygons/canakkale_aoi_1.geojson \
    --start-date 2023-07-01 \
    --end-date 2023-07-21 \
-   --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS \
+   --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS
 ```
 
 If `--deliverables` is **not provided**, **all available deliverables** are generated.
