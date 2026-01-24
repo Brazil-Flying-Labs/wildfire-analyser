@@ -426,17 +426,22 @@ def main():
                     values["ratio_percent"],
                 )
 
-
+    
 if __name__ == "__main__":
     
     ERROR_MSG = (
         "\nERROR: Unable to process the request with the provided parameters.\n"
         "Please check the selected time period, input files, and arguments, and try again.\n"
     )
+    
+    SUCCESS_MSG = (
+        "\nSUCCESS: Request processed successfully.\n"
+        "All deliverables were generated as expected.\n"
+    )
 
-if __name__ == "__main__":
     try:
         main()
+        print(SUCCESS_MSG)
     except Exception:
         print(ERROR_MSG)
         sys.exit(2)
