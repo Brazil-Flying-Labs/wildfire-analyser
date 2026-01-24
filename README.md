@@ -71,7 +71,6 @@ source venv/bin/activate
 
 pip install wildfire-analyser
 ```
-
 ---
 
 ## Required Files Before Running the Client
@@ -222,3 +221,34 @@ For help and full usage information:
 ```bash
 python3 -m wildfire_analyser.cli --help
 ```
+
+## Additional Documentation 
+
+The following documents provide more detailed and advanced guidance for
+development, environment setup, and asynchronous processing workflows.
+They are not required if the environment is already configured, but are
+recommended for first-time setup, developers, and production deployments.
+
+* **Development Guide**
+  Internal architecture, project conventions, and contribution guidelines.
+  [`docs/development.md`](docs/development.md)
+
+* **Environment & Credentials Setup**
+  Step-by-step instructions for configuring Google Earth Engine,
+  service accounts, environment variables, and Cloud Storage.
+  [`docs/environment-setup.md`](docs/environment-setup.md)
+
+* 🔧 **Asynchronous GEE Task Monitoring**
+  Detailed explanation of asynchronous scientific exports, `gee_task_id`
+  handling, and task monitoring using the standalone CLI tool.
+ [`docs/gee_task_monitoring.md`](docs/gee_task_monitoring.md)
+
+---
+
+### When to read these documents
+
+* Read **environment-setup.md** before running the pipeline in a new system.
+* Read **gee_task_monitoring.md** when integrating with frontend/backend
+  architectures or background workers.
+* Read **development.md** if you plan to modify or extend the codebase.
+---
