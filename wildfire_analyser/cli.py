@@ -245,7 +245,7 @@ def main():
     parser.add_argument(
         "--cloud-threshold",
         type=int,
-        default=70,
+        default=100,
         help=(
             "Maximum allowed CLOUDY_PIXEL_PERCENTAGE for Sentinel-2 scenes "
             "(default: 100). Higher values include more cloudy scenes."

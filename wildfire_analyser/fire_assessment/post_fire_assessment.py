@@ -57,7 +57,7 @@ class PostFireAssessment:
         start_date: str,
         end_date: str,
         deliverables: List[Deliverable],
-        cloud_threshold: int = 70,
+        cloud_threshold: int = 100,
         days_before_after: int = 30,
         gcs_bucket: str | None = None,
         verbose: bool = False,

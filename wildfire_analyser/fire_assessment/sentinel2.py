@@ -75,7 +75,7 @@ def gather_collection(
         ee.ImageCollection(COLLECTION_ID)
         .filterBounds(roi)
         .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
-        # .map(_mask_s2_clouds)
+        #.map(_mask_s2_clouds)
         .map(_add_reflectance_bands)
         .sort("CLOUDY_PIXEL_PERCENTAGE", False)
     )
