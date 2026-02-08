@@ -1,21 +1,19 @@
-# SPDX-License-Identifier: MIT
-#
-# Mosaic strategy implementations.
-#
-# Mosaic strategy implementations.
-#
-# This module defines alternative compositing strategies for combining
-# multiple satellite acquisitions into a single analysis-ready image.
-#
-# Each strategy represents a distinct decision policy for resolving
-# clouds, overlapping scenes, and temporal redundancy.
-#
-# The processing pipeline delegates all compositing decisions to this
-# module, keeping higher-level code policy-agnostic.
-#
-# Copyright (C) 2025
-# Marcelo Camargo.
+""" 
+SPDX-License-Identifier: MIT
 
+Mosaic strategy implementations.
+
+This module defines alternative compositing strategies for combining
+multiple satellite acquisitions into a single analysis-ready image.
+
+Each strategy represents a distinct compositing decision policy.
+
+The processing pipeline delegates all compositing decisions to this
+module, keeping higher-level code policy-agnostic.
+
+Copyright (C) 2025
+Marcelo Camargo.
+"""
 
 import ee
 
@@ -26,209 +24,139 @@ def apply_mosaic_strategy(
     context,
 ) -> ee.Image:
     """
-    Dispatch to a compositing strategy based on a named decision rule.
+    Apply a named mosaic strategy to an ImageCollection.
     """
 
-    if strategy == "scene_mosaic_cloud_sorted":
-        return _scene_mosaic_cloud_sorted(collection, context)
-    
-    if strategy == "best_scene_selection":
-        return _best_scene_selection(collection, context)
-    
-    if strategy == "pixel_quality":
-        return _pixel_quality(collection, context)
+    strategies = {
+        "best_available_scene_raw": best_available_scene_raw,
+        "cloud_masked_light_mosaic": cloud_masked_light_mosaic,
+        "best_available_scene": best_available_scene,
+    }
 
-    if strategy == "pixel_quality_cloud_penalized":
-        return _pixel_quality_cloud_penalized(collection, context)
-    
-    if strategy == "pixel_quality_hybrid_fallback":
-        return _pixel_quality_hybrid_fallback(collection, context)
+    func = strategies.get(strategy)
+    if func is None:
+        raise ValueError(f"Unknown mosaic strategy: '{strategy}'")
 
-    raise ValueError(f"Unknown mosaic strategy: {strategy}")
+    return func(collection, context)
 
 
-def _scene_mosaic_cloud_sorted(
+def best_available_scene_raw(
     collection: ee.ImageCollection,
     context,
 ) -> ee.Image:
     """
-    Prefer pixels from less cloudy scenes, falling back to more
-    cloudy scenes only where necessary to fill gaps.
-    """
-    
-    cloud_threshold = context.inputs.get("cloud_threshold")
-    
-    return (
-        collection
-        .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
-        .sort("CLOUDY_PIXEL_PERCENTAGE", False)
-        .mosaic()
-    )
+    Selects the least cloudy acquisition and mosaics only its tiles.
 
-def _best_scene_selection(
-    collection: ee.ImageCollection,
-    context,
-) -> ee.Image:
-    """
-    Use a single acquisition, chosen as the least cloudy scene
-    within the analysis period.
+    - Single acquisition (no temporal mixing)
+    - Mosaic is used only to merge spatial tiles
     """
 
     cloud_threshold = context.inputs.get("cloud_threshold")
 
-    return (
+    # Select the least cloudy acquisition in the period
+    best_scene = (
         collection
         .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
-        .sort("CLOUDY_PIXEL_PERCENTAGE", True)
-        .limit(1)
-        .mosaic()
+        .sort("CLOUDY_PIXEL_PERCENTAGE")
+        .first()
     )
 
-def _pixel_quality(
+    # Assumes system:index uniquely identifies an acquisition (Sentinel-2)
+    scene_id = best_scene.get("system:index")
+
+    # Rebuild the collection using only images from this acquisition
+    same_acquisition = collection.filter(
+        ee.Filter.eq("system:index", scene_id)
+    )
+
+    # Mosaic is used only to merge spatial tiles
+    unified = same_acquisition.mosaic()
+
+    return unified
+
+
+def cloud_masked_light_mosaic(
+    collection: ee.ImageCollection,
+    context,
+) -> ee.Image:    
+    """
+    Pixel-based mosaic using cloud probability as a quality weight.
+
+    - Applies a light SCL cloud mask
+    - Selects pixels with lower cloud probability across dates
+    """
+       
+    def _mask_scl_light(image: ee.Image) -> ee.Image:
+        scl = image.select("SCL")
+
+        # Mask only clearly invalid observations
+        invalid = (
+            scl.eq(1)
+            .Or(scl.eq(3))   # Cloud shadow
+            .Or(scl.eq(9))   # High probability cloud
+            .Or(scl.eq(10))  # Cirrus
+        )
+        return image.updateMask(invalid.Not())
+
+    def _pixel_mosaic_by_cloud_prob(
+        collection: ee.ImageCollection,
+    ) -> ee.Image:
+
+        def add_quality(image: ee.Image) -> ee.Image:
+            prob = image.select("MSK_CLDPRB")
+            scl = image.select("SCL")
+
+            # Higher quality = lower cloud probability
+            quality = ee.Image(100).subtract(prob)
+
+            # Penalize cloud edges without fully masking them
+            quality = quality.where(
+                scl.eq(8),
+                quality.subtract(5)
+            )
+
+            return image.addBands(quality.rename("quality"))
+
+        return (
+            collection
+            .map(add_quality)
+            .qualityMosaic("quality")
+        )
+    
+    masked = collection.map(_mask_scl_light)
+    mosaic = _pixel_mosaic_by_cloud_prob(masked)
+
+    # Remove auxiliary quality band from output
+    return mosaic.select(
+        mosaic.bandNames().remove("quality")
+    )
+
+def best_available_scene(
     collection: ee.ImageCollection,
     context,
 ) -> ee.Image:
     """
-    For each pixel location, select the locally clearest observation
-    based solely on per-pixel cloud information.
+    Scene-based strategy with physical cloud masking.
+
+    - Single acquisition
+    - Applies SCL-based cloud mask
+    - Accepts data gaps
     """
 
-    def add_quality_band(image):
-        qa = image.select("QA60")
+    def _mask_scl(image: ee.Image) -> ee.Image:
+        """
+        Removes physically invalid pixels using the SCL band.
+        """
 
-        cloud = qa.bitwiseAnd(1 << 10).neq(0)
-        cirrus = qa.bitwiseAnd(1 << 11).neq(0)
+        scl = image.select("SCL")
 
-        quality = (
-            ee.Image(1.0)
-            .where(cirrus.And(cloud.Not()), 0.6)
-            .where(cloud.And(cirrus.Not()), 0.2)
-            .where(cloud.And(cirrus), 0.0)
-            .rename("quality")
+        invalid = (
+            scl.eq(1)        # Saturated / defective
+            .Or(scl.eq(3))   # Cloud shadow
+            .Or(scl.eq(9))   # Cloud high probability
+            .Or(scl.eq(10))  # Cirrus
         )
 
-        return image.addBands(quality)
+        return image.updateMask(invalid.Not())
 
-    return (
-        collection
-        .sort("CLOUDY_PIXEL_PERCENTAGE", False)
-        .map(add_quality_band)
-        .qualityMosaic("quality")
-    )
-
-def _pixel_quality_cloud_penalized(
-    collection: ee.ImageCollection,
-    context,
-) -> ee.Image:
-    """
-    Select the clearest pixel locally, but slightly penalize pixels
-    originating from globally cloudier scenes.
-    """
-
-    def add_quality(image):
-        qa = image.select("QA60")
-
-        cloud = qa.bitwiseAnd(1 << 10).neq(0)
-        cirrus = qa.bitwiseAnd(1 << 11).neq(0)
-
-        pixel_quality = (
-            ee.Image(1.0)
-            .where(cirrus.And(cloud.Not()), 0.6)
-            .where(cloud.And(cirrus.Not()), 0.2)
-            .where(cloud.And(cirrus), 0.0)
-        )
-
-        # Scene-level cloudiness (normalized 0–1)
-        scene_cloud = ee.Number(
-            image.get("CLOUDY_PIXEL_PERCENTAGE")
-        ).divide(100.0)
-
-        scene_penalty = ee.Image(scene_cloud).multiply(0.05)
-
-        quality = (
-            pixel_quality
-            .subtract(scene_penalty)
-            .rename("quality")
-            .toFloat()
-        )
-
-        return image.addBands(quality)
-
-    return (
-        collection
-        .map(add_quality)
-        .qualityMosaic("quality")
-    )
-
-def _pixel_quality_hybrid_fallback(
-    collection: ee.ImageCollection,
-    context,
-) -> ee.Image:
-    """
-    Use the best available pixel where possible; where no pixel
-    meets a minimum quality threshold, fall back to a scene-based
-    selection.
-    """
-
-    min_quality = context.inputs.get("min_pixel_quality", 0.3)
-    cloud_threshold = context.inputs.get("cloud_threshold", 100)
-    scene_weight = context.inputs.get("scene_penalty_weight", 0.05)
-
-    def add_quality(image):
-        qa = image.select("QA60")
-
-        cloud = qa.bitwiseAnd(1 << 10).neq(0)
-        cirrus = qa.bitwiseAnd(1 << 11).neq(0)
-
-        pixel_quality = (
-            ee.Image(1.0)
-            .where(cirrus.And(cloud.Not()), 0.6)
-            .where(cloud.And(cirrus.Not()), 0.2)
-            .where(cloud.And(cirrus), 0.0)
-        )
-
-        scene_cloud = ee.Number(
-            image.get("CLOUDY_PIXEL_PERCENTAGE")
-        ).divide(100.0)
-
-        scene_penalty = ee.Image(scene_cloud).multiply(scene_weight)
-
-        quality = (
-            pixel_quality
-            .subtract(scene_penalty)
-            .rename("quality")
-            .toFloat()
-        )
-
-        return image.addBands(quality)
-
-    quality_mosaic = (
-        collection
-        .map(add_quality)
-        .qualityMosaic("quality")
-    )
-
-    quality_mosaic_clean = quality_mosaic.select(
-        quality_mosaic.bandNames().remove("quality")
-    )
-
-    fallback_mosaic = (
-        collection
-        .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
-        .sort("CLOUDY_PIXEL_PERCENTAGE", False)
-        .mosaic()
-    )
-
-    low_quality_mask = (
-        quality_mosaic
-        .select("quality")
-        .lt(min_quality)
-    )
-
-    final_mosaic = quality_mosaic_clean.where(
-        low_quality_mask,
-        fallback_mosaic
-    )
-
-    return final_mosaic
-
+    return _mask_scl(best_available_scene_raw(collection, context))

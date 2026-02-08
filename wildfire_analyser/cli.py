@@ -74,6 +74,8 @@ lib_logger.propagate = True
 PAPER_PRESETS = {
     "PAPER_DENIZ_FUSUN_RAMAZAN": {
         "deliverables": [
+            Deliverable.RGB_PRE_FIRE_VISUAL,
+            Deliverable.RGB_POST_FIRE_VISUAL,
             Deliverable.DNBR_VISUAL,
             Deliverable.DNDVI_VISUAL,
             Deliverable.RBR_VISUAL,
@@ -292,6 +294,8 @@ def main():
                 deliverables=preset["deliverables"],
                 days_before_after=1,
                 cloud_threshold=100,
+                pre_fire_mosaic_strategy = "best_available_scene",
+                post_fire_mosaic_strategy = "best_available_scene",
                 gcs_bucket=gcs_bucket_name,
                 verbose=True,
             )
