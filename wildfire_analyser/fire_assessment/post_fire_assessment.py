@@ -59,8 +59,8 @@ class PostFireAssessment:
         deliverables: List[Deliverable],
         cloud_threshold: int = 100,
         days_before_after: int = 30,
-        pre_fire_mosaic_strategy: str = "best_available_scene",  
-        post_fire_mosaic_strategy: str = "best_available_scene",
+        pre_fire_mosaic_strategy: str = "best_available_per_tile_mosaic",  
+        post_fire_mosaic_strategy: str = "best_available_per_tile_mosaic",
         gcs_bucket: str | None = None,
         verbose: bool = False,
     ):

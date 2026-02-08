@@ -1,15 +1,19 @@
 """ 
 SPDX-License-Identifier: MIT
 
-Mosaic strategy implementations.
+This module defines alternative mosaic strategies grouped into:
 
-This module defines alternative compositing strategies for combining
-multiple satellite acquisitions into a single analysis-ready image.
+1) Date-based strategies:
+   - Select a single sensing date and mosaic all spatial tiles from that date.
 
-Each strategy represents a distinct compositing decision policy.
+2) Tile-based strategies:
+   - Select the best available scene independently for each spatial tile.
 
-The processing pipeline delegates all compositing decisions to this
-module, keeping higher-level code policy-agnostic.
+3) Pixel-based strategies:
+   - Select pixels across time based on per-pixel quality metrics.
+
+Each strategy makes its compositing policy explicit, avoiding implicit
+assumptions about spatial or temporal completeness.
 
 Copyright (C) 2025
 Marcelo Camargo.
@@ -28,9 +32,10 @@ def apply_mosaic_strategy(
     """
 
     strategies = {
-        "best_available_scene_raw": best_available_scene_raw,
+        "best_date_mosaic": best_date_mosaic,
+        "best_date_masked_mosaic": best_date_masked_mosaic,
+        "best_available_per_tile_mosaic": best_available_per_tile_mosaic,
         "cloud_masked_light_mosaic": cloud_masked_light_mosaic,
-        "best_available_scene": best_available_scene,
     }
 
     func = strategies.get(strategy)
@@ -40,39 +45,47 @@ def apply_mosaic_strategy(
     return func(collection, context)
 
 
-def best_available_scene_raw(
+def best_date_mosaic(
     collection: ee.ImageCollection,
     context,
 ) -> ee.Image:
     """
-    Selects the least cloudy acquisition and mosaics only its tiles.
+    Date-based mosaic strategy.
 
-    - Single acquisition (no temporal mixing)
-    - Mosaic is used only to merge spatial tiles
+    Selects the least cloudy sensing date and mosaics all spatial tiles
+    available for that date.
+
+    - Single sensing date
+    - Multi-tile (Sentinel-2 compatible)
+    - No temporal mixing
+    - Mosaic is used only for spatial stitching
     """
 
     cloud_threshold = context.inputs.get("cloud_threshold")
 
-    # Select the least cloudy acquisition in the period
-    best_scene = (
-        collection
-        .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
-        .sort("CLOUDY_PIXEL_PERCENTAGE")
-        .first()
+    filtered = collection
+    if cloud_threshold is not None:
+        filtered = filtered.filter(
+            ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold)
+        )
+
+    # Derive sensing date (YYYY-MM-dd)
+    def add_date(image):
+        date = ee.Date(image.get("system:time_start")).format("YYYY-MM-dd")
+        return image.set("sensing_date", date)
+
+    dated = filtered.map(add_date)
+
+    # Pick best image to identify the best date
+    best_image = dated.sort("CLOUDY_PIXEL_PERCENTAGE").first()
+    best_date = best_image.get("sensing_date")
+
+    # Rebuild collection using all tiles from that date
+    same_date = dated.filter(
+        ee.Filter.eq("sensing_date", best_date)
     )
 
-    # Assumes system:index uniquely identifies an acquisition (Sentinel-2)
-    scene_id = best_scene.get("system:index")
-
-    # Rebuild the collection using only images from this acquisition
-    same_acquisition = collection.filter(
-        ee.Filter.eq("system:index", scene_id)
-    )
-
-    # Mosaic is used only to merge spatial tiles
-    unified = same_acquisition.mosaic()
-
-    return unified
+    return same_date.mosaic()
 
 
 def cloud_masked_light_mosaic(
@@ -131,14 +144,15 @@ def cloud_masked_light_mosaic(
         mosaic.bandNames().remove("quality")
     )
 
-def best_available_scene(
+def best_date_masked_mosaic(
     collection: ee.ImageCollection,
     context,
 ) -> ee.Image:
     """
-    Scene-based strategy with physical cloud masking.
+    Date-based mosaic strategy with physical cloud masking.
 
-    - Single acquisition
+    - Single sensing date
+    - Multi-tile (Sentinel-2 compatible)
     - Applies SCL-based cloud mask
     - Accepts data gaps
     """
@@ -159,4 +173,43 @@ def best_available_scene(
 
         return image.updateMask(invalid.Not())
 
-    return _mask_scl(best_available_scene_raw(collection, context))
+    return _mask_scl(best_date_mosaic(collection, context))
+
+
+def best_available_per_tile_mosaic(
+    collection: ee.ImageCollection,
+    context,
+) -> ee.Image:
+    """
+    Scene-based per-tile mosaic strategy.
+
+    - For each spatial tile (MGRS_TILE), selects the best available scene
+    - Scene quality is evaluated independently per tile
+    - Dates may vary across tiles
+    - No pixel-level mixing
+    - Mosaic is used only for spatial stitching
+    """
+
+    cloud_threshold = context.inputs.get("cloud_threshold")
+
+    filtered = collection
+    if cloud_threshold is not None:
+        filtered = filtered.filter(
+            ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold)
+        )
+
+    tiles = ee.List(filtered.aggregate_array("MGRS_TILE")).distinct()
+
+    def select_best_for_tile(tile_id):
+        tile_collection = (
+            filtered
+            .filter(ee.Filter.eq("MGRS_TILE", tile_id))
+            .sort("CLOUDY_PIXEL_PERCENTAGE")
+        )
+        return ee.Image(tile_collection.first())
+
+    per_tile_best = ee.ImageCollection(
+        tiles.map(select_best_for_tile)
+    )
+
+    return per_tile_best.mosaic()
