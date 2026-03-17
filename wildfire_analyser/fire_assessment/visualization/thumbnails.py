@@ -11,14 +11,14 @@
 # - Earth Engine objects are evaluated lazily until getThumbURL() is called.
 # - Thumbnail generation triggers server-side execution but returns
 #   immediately with a signed URL.
-# - Images are clipped to the bounding box of the region of interest (ROI)
-#   to preserve spatial context while limiting request size.
+# - Thumbnails can either be clipped strictly to the ROI or rendered over the
+#   full ROI bounding box while preserving pixels outside the ROI.
 # - Fixed dimensions are used instead of scale to avoid Earth Engine pixel
 #   grid and request size limitations.
 #
 # Responsibilities of this module:
 # - Generate stable thumbnail URLs for visual deliverables.
-# - Apply spatial clipping to the ROI bounding box.
+# - Apply ROI masking and white background outside the ROI.
 # - Define thumbnail rendering parameters (dimensions, format).
 #
 # Copyright (C) 2025
@@ -34,8 +34,13 @@ import ee
 def get_visual_thumbnail_url(
     image: ee.Image,
     roi: ee.Geometry,
+    roi_only: bool = False,
 ) -> str:
-    image = image.clip(roi.bounds())
+    if roi_only:
+        image = image.clip(roi)
+    else:
+        image = image.clip(roi.bounds())
+
     return image.getThumbURL({
         "dimensions": 1024,
         "format": "jpg",

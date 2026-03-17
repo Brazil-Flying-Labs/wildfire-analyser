@@ -56,7 +56,7 @@ def rbr_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
     outline = ee.Image().byte().paint(
         ee.FeatureCollection(roi),
         color=1,
-        width=2,
+        width=4,
     )
 
     return styled.blend(outline.visualize(palette=["000000"]))

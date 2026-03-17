@@ -62,6 +62,7 @@ class PostFireAssessment:
         days_before_after: int = 30,
         pre_fire_mosaic_strategy: str = MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC,  
         post_fire_mosaic_strategy: str = MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC,
+        roi_only: bool = False,
         gcs_bucket: str | None = None,
         verbose: bool = False,
     ):
@@ -81,6 +82,7 @@ class PostFireAssessment:
         self.roi = self._load_geojson(Path(geojson_path))
         self.deliverables = deliverables
         self.bucket = gcs_bucket
+        self.roi_only = roi_only
 
         self.context = DAGExecutionContext(
             roi=self.roi,
@@ -111,7 +113,11 @@ class PostFireAssessment:
             if d in VISUAL_RENDERERS:
                 vis = VISUAL_RENDERERS[d](value, self.roi)
                 result["visual"][d.name] = {
-                    "url": get_visual_thumbnail_url(vis, self.roi)
+                    "url": get_visual_thumbnail_url(
+                        vis,
+                        self.roi,
+                        roi_only=self.roi_only,
+                    )
                 }
                 continue
 

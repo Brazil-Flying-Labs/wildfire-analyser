@@ -35,7 +35,7 @@ def _outline(roi):
     return ee.Image().byte().paint(
         featureCollection=ee.FeatureCollection(roi),
         color=1,
-        width=2,
+        width=4,
     )
 
 

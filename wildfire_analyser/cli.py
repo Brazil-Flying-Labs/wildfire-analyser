@@ -88,14 +88,14 @@ PAPER_PRESETS = {
         "runs": [
             {
                 "name": "Area_1_July_Fire",
-                "roi": "polygons/canakkale_aoi_1.geojson",
+                "roi": "polygons/ccanakkale01.geojson",
                 "start_date": "2023-07-01",
                 "end_date": "2023-07-21",
                 "days_before_after": 1,
             },
             {
                 "name": "Area_2_August_Fire",
-                "roi": "polygons/canakkale_aoi_2.geojson",
+                "roi": "polygons/ccanakkale02.geojson",
                 "start_date": "2023-07-31",
                 "end_date": "2023-08-30",
                 "days_before_after": 1,
@@ -255,6 +255,24 @@ def main():
             "(default: 100). Higher values include more cloudy scenes."
         ),
     )
+    parser.add_argument(
+        "--fire-mosaic-strategy",
+        default=MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC.value,
+        choices=[s.value for s in MosaicStrategy],
+        help=(
+            "Mosaic strategy for pre- and post-fire composites "
+            f"(default: {MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC.value})"
+        ),
+    )
+    parser.add_argument(
+        "--roi-only",
+        action="store_true",
+        help=(
+            "Render visual thumbnails only inside the ROI. By default, the "
+            "full ROI bounding box is shown, including rendered pixels "
+            "outside the ROI."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -298,6 +316,7 @@ def main():
                 cloud_threshold=100,
                 pre_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
                 post_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
+                roi_only=args.roi_only,
                 gcs_bucket=gcs_bucket_name,
                 verbose=True,
             )
@@ -371,6 +390,9 @@ def main():
             days_before_after=args.days_before_after,
             cloud_threshold=args.cloud_threshold,
             deliverables=deliverables, 
+            pre_fire_mosaic_strategy=args.fire_mosaic_strategy,
+            post_fire_mosaic_strategy=args.fire_mosaic_strategy,
+            roi_only=args.roi_only,
             gcs_bucket=gcs_bucket_name,
             verbose=True,
         )

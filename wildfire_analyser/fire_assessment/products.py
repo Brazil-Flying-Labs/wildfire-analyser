@@ -395,10 +395,9 @@ def compute_dndvi_area_statistics(context):
 
     severity = (
         ee.Image(0)  # Unburned: dNDVI < 0.07
-        .where(dndvi.gte(0.07).And(dndvi.lt(0.10)), 1)   # Low
-        .where(dndvi.gte(0.10).And(dndvi.lt(0.20)), 1)  # Low
+        .where(dndvi.gte(0.07).And(dndvi.lt(0.20)), 1)  # Low
         .where(dndvi.gte(0.20).And(dndvi.lt(0.33)), 2)  # Moderate
-        .where(dndvi.gte(0.33).And(dndvi.lt(0.44)), 3)  # High
+        .where(dndvi.gte(0.33).And(dndvi.lt(0.45)), 3)  # High
         .where(dndvi.gte(0.45), 4)                      # Very High
     )
 

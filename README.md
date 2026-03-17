@@ -90,7 +90,7 @@ Create a folder named `polygons` in the project root and place your ROI polygon 
 └── venv/
 ```
 
-Example GeoJSON files are available in the repository (e.g. `canakkale_aoi_1.geojson`).
+Example GeoJSON files are available in the repository (e.g. `ccanakkale01.geojson`).
 
 ---
 
@@ -115,7 +115,7 @@ After adding the `.env` file and your GeoJSON polygon. Please update your GEE se
 
 ```bash
 python3 -m wildfire_analyser.cli \
-  --roi polygons/canakkale_aoi_1.geojson \
+  --roi polygons/ccanakkale01.geojson \
   --start-date 2023-07-01 \
   --end-date 2023-07-21 \
   --deliverables \
@@ -139,7 +139,7 @@ python3 -m wildfire_analyser.cli \
     RGB_PRE_FIRE_VISUAL \
     RGB_POST_FIRE_VISUAL \
     DNBR_VISUAL \
-    DNBR_AREA_STATISTICS
+    DNBR_AREA_STATISTICS \
 ```
 
 This will:
@@ -149,6 +149,20 @@ This will:
 * Generate **scientific GeoTIFF outputs** (when applicable)
 * Compute **burned area statistics**
 * Print all results to the terminal
+
+### ROI-only visual mode
+
+Visual thumbnails support an optional `--roi-only` flag.
+
+This parameter affects only visual deliverables such as `RGB_*_VISUAL`,
+`DNBR_VISUAL`, `DNDVI_VISUAL`, and `RBR_VISUAL`.
+
+* Default behavior:
+  Renders the thumbnail using the ROI bounding box (`clip(roi.bounds())`).
+  This keeps the full rectangular extent around the ROI in the JPEG preview.
+* `--roi-only`:
+  Renders the thumbnail clipped directly to the ROI geometry (`clip(roi)`),
+  so the preview is limited to the ROI footprint.
 
 ---
 
@@ -186,7 +200,7 @@ Example:
 
 ```bash
 python3 -m wildfire_analyser.cli \
-   --roi polygons/canakkale_aoi_1.geojson \
+   --roi polygons/ccanakkale01.geojson \
    --start-date 2023-07-01 \
    --end-date 2023-07-21 \
    --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS
@@ -221,8 +235,8 @@ Internally, it runs:
 
 | Area   | ROI                       | Pre-fire   | Post-fire  |
 | ------ | ------------------------- | ---------- | ---------- |
-| Area 1 | `canakkale_aoi_1.geojson` | 2023-07-01 | 2023-07-21 |
-| Area 2 | `canakkale_aoi_2.geojson` | 2023-07-31 | 2023-08-30 |
+| Area 1 | `ccanakkale01.geojson` | 2023-07-01 | 2023-07-21 |
+| Area 2 | `ccanakkale02.geojson` | 2023-07-31 | 2023-08-30 |
 
 ---
 
