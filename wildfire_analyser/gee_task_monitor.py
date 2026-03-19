@@ -1,30 +1,7 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2025 Marcelo Camargo.
 #
-# Google Earth Engine (GEE) task monitoring utility.
-#
-# This module provides a small command-line utility to monitor the execution
-# state of a Google Earth Engine task until it completes, fails, or is cancelled.
-#
-# It is intended to be used in automated workflows where GEE export tasks
-# (e.g. Export.image.toCloudStorage) are triggered asynchronously and their
-# completion must be tracked before proceeding to the next pipeline step.
-#
-# Design notes:
-# - Authentication is handled via a service account JSON provided through
-#   the GEE_PRIVATE_KEY_JSON environment variable.
-# - Task monitoring uses ee.data.getTaskStatus and assumes a single task ID.
-# - Polling is time-based and does not rely on callbacks or webhooks.
-#
-# Responsibilities of this module:
-# - Authenticate against Google Earth Engine using non-interactive credentials.
-# - Monitor the lifecycle of a single GEE task.
-# - Provide a simple CLI interface for integration into scripts and pipelines.
-#
-# Copyright (C) 2025
-# Marcelo Camargo.
-#
-# This file is part of wildfire-analyser and is distributed under the terms
-# of the MIT license. See the LICENSE file for details.
+# Google Earth Engine task monitoring utility.
 
 import argparse
 import json
@@ -47,6 +24,7 @@ SUCCESS_MSG = (
 
 
 def init_gee() -> None:
+    """Initialize Earth Engine using the configured service account JSON."""
     load_dotenv()
 
     gee_key_json = os.getenv("GEE_PRIVATE_KEY_JSON")
@@ -64,6 +42,7 @@ def init_gee() -> None:
 
 
 def wait_for_task(gee_task_id: str) -> None:
+    """Poll a GEE task until it completes, fails, or is cancelled."""
     while True:
         statuses = ee.data.getTaskStatus(gee_task_id)
 
@@ -86,6 +65,7 @@ def wait_for_task(gee_task_id: str) -> None:
 
 
 def main() -> None:
+    """Parse CLI arguments and monitor the requested GEE task."""
     parser = argparse.ArgumentParser(
         description="Monitor a Google Earth Engine task until completion"
     )

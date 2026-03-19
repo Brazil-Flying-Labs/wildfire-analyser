@@ -1,280 +1,112 @@
-<!--
-SPDX-License-Identifier: MIT
+# wildfire-analyser
 
-wildfire-analyser
-=================
+`wildfire-analyser` is a Python library for post-fire assessment with Sentinel-2 imagery in Google Earth Engine. It generates three kinds of outputs from a region of interest (ROI): scientific rasters, visual previews, and burned-area statistics.
 
-An open-source Python pipeline for post-fire assessment and burned area
-analysis using Sentinel-2 imagery and Google Earth Engine (GEE).
+The project is organized around a dependency-driven workflow, so the CLI only computes what is required for the deliverables you request.
 
-This project provides a reproducible, automated workflow for computing
-fire-related spectral indices, generating visual products, and producing 
-burned area statistics for scientific and operational use.
+## What It Produces
 
-The library is designed with a clear separation between:
-- Scientific computation (core library)
-- Dependency-driven execution (DAG)
-- Command-line interfaces (CLI tools)
+- Scientific products exported as GeoTIFFs to Google Cloud Storage
+- Visual products returned as Google Earth Engine thumbnail URLs
+- Burned-area statistics for dNBR, dNDVI, and RBR
 
-Copyright (C) 2025
-Marcelo Camargo.
+## Requirements
 
-Licensed under the MIT License. See the LICENSE file for details.
--->
+Before running the CLI, prepare:
 
-## Project Architecture (Overview)
+- A GeoJSON polygon file for the ROI
+- A Google Earth Engine service account credential in `GEE_PRIVATE_KEY_JSON`
+- A Google Cloud Storage bucket name in `GCS_BUCKET_NAME` if you request scientific deliverables
 
-The wildfire-analyser project is organized into three conceptual layers:
+`GCS_BUCKET_NAME` is only required for scientific deliverables exported to Google Cloud Storage. Visual outputs and statistics do not require a bucket.
 
-- **Core library (`fire_assessment`)**  
-  Implements scientific computation, dependency resolution, and Earth Engine logic.
-
-- **Execution layer (DAG)**  
-  Automatically resolves and executes dependencies required for each deliverable.
-
-- **Command-line interfaces (CLI)**  
-  User-facing tools for running analyses and monitoring Earth Engine tasks.
-
-## Outputs
-
-All generated outputs (GeoTIFFs, thumbnails, statistics) are considered
-runtime artifacts and are not committed to version control.
-
-## Scientific Background
-
-This project is **based on the peer-reviewed study**:
-
-> **Spatial and statistical analysis of burned areas with Landsat-8/9 and Sentinel-2 satellites: 2023 Çanakkale forest fires**
-> **Authors:** Deniz Bitek, Fusun Balik Sanli, Ramazan Cuneyt Erenoglu
-> **Study area:** Çanakkale Province, Turkey
-
-The methodology implemented in `wildfire-analyser` follows the **same analytical framework and burn severity thresholds** described in the paper, particularly for the **Sentinel-2–based analysis**, including:
-
-* dNBR, dNDVI and RBR indices
-* Burn severity classification tables
-* Area statistics in hectares and percentage
-
-Minor numerical differences may occur due to cloud masking, spatial sampling, and Google Earth Engine implementation details.
-
----
-
-## Installation and Usage
-
-Follow the steps below to install and test `wildfire-analyser` inside an isolated environment:
+## Quickstart (Repository)
 
 ```bash
-mkdir test
-cd test
-
 python3 -m venv venv
-source venv/bin/activate
-
-pip install wildfire-analyser
-```
----
-
-## Required Files Before Running the Client
-
-Before running the client, you **must** prepare the following items:
-
----
-
-### 1. Add a GeoJSON polygon (ROI)
-
-Create a folder named `polygons` in the project root and place your ROI polygon file inside it:
-
-```
-/tmp/test/
-├── polygons/
-│   └── your_polygon.geojson
-└── venv/
+./venv/bin/pip install -r requirements.txt
+cp wildfire_analyser/.env.template .env
 ```
 
-Example GeoJSON files are available in the repository (e.g. `ccanakkale01.geojson`).
+Then edit `.env` with your real Earth Engine credentials and, if needed, your bucket name. Place your ROI GeoJSON under `polygons/`.
 
----
+Example layout:
 
-### 2. Create the `.env` file with GEE credentials
-
-In the project root, add a `.env` file containing your Google Earth Engine authentication variables.
-
-A `.env.template` file is available in the repository.
-
-```
-/tmp/test/
+```text
+.
 ├── .env
 ├── polygons/
+│   └── ccanakkale01.geojson
 └── venv/
 ```
 
----
+## Run the CLI
 
-## Running the Client (Standard Mode)
-
-After adding the `.env` file and your GeoJSON polygon. Please update your GEE service account key and the bucket name in the `.env` file.
+Minimal example:
 
 ```bash
-python3 -m wildfire_analyser.cli \
+./venv/bin/python -m wildfire_analyser.cli \
   --roi polygons/ccanakkale01.geojson \
   --start-date 2023-07-01 \
   --end-date 2023-07-21 \
-  --deliverables \
-    DNBR_VISUAL \
-    DNDVI_VISUAL \
-    RBR_VISUAL \
-    DNBR_AREA_STATISTICS \
-    DNDVI_AREA_STATISTICS \
-    RBR_AREA_STATISTICS \
-  --days-before-after 0
+  --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS
 ```
 
-or:
+Example with more outputs:
 
 ```bash
-python3 -m wildfire_analyser.cli \
+./venv/bin/python -m wildfire_analyser.cli \
   --roi polygons/eejatai.geojson \
   --start-date 2024-09-26 \
   --end-date 2024-10-05 \
-  --deliverables \
-    RGB_PRE_FIRE_VISUAL \
-    RGB_POST_FIRE_VISUAL \
-    DNBR_VISUAL \
-    DNBR_AREA_STATISTICS \
+  --deliverables RGB_PRE_FIRE_VISUAL RGB_POST_FIRE_VISUAL DNBR_VISUAL DNBR_AREA_STATISTICS
 ```
 
-This will:
-
-* Run the post-fire assessment pipeline
-* Generate **visual thumbnail URLs**
-* Generate **scientific GeoTIFF outputs** (when applicable)
-* Compute **burned area statistics**
-* Print all results to the terminal
-
-### ROI-only visual mode
-
-Visual thumbnails support an optional `--roi-only` flag.
-
-This parameter affects only visual deliverables such as `RGB_*_VISUAL`,
-`DNBR_VISUAL`, `DNDVI_VISUAL`, and `RBR_VISUAL`.
-
-* Default behavior:
-  Renders the thumbnail using the ROI bounding box (`clip(roi.bounds())`).
-  This keeps the full rectangular extent around the ROI in the JPEG preview.
-* `--roi-only`:
-  Renders the thumbnail clipped directly to the ROI geometry (`clip(roi)`),
-  so the preview is limited to the ROI footprint.
-
----
+If `--deliverables` is omitted, the CLI requests every deliverable defined in [`wildfire_analyser/fire_assessment/deliverables.py`](/home/marcelo/code/wildfire-analyser/wildfire_analyser/fire_assessment/deliverables.py).
 
 ## Deliverables
 
-You may explicitly select deliverables using `--deliverables`.
+Scientific:
+`RGB_PRE_FIRE`, `RGB_POST_FIRE`, `NDVI_PRE_FIRE`, `NDVI_POST_FIRE`, `NBR_PRE_FIRE`, `NBR_POST_FIRE`, `DNDVI`, `DNBR`, `RBR`
 
-### Scientific products
+Visual:
+`RGB_PRE_FIRE_VISUAL`, `RGB_POST_FIRE_VISUAL`, `DNDVI_VISUAL`, `DNBR_VISUAL`, `RBR_VISUAL`
 
-* `RGB_PRE_FIRE`
-* `RGB_POST_FIRE`
-* `NDVI_PRE_FIRE`
-* `NDVI_POST_FIRE`
-* `NBR_PRE_FIRE`
-* `NBR_POST_FIRE`
-* `DNDVI`
-* `DNBR`
-* `RBR`
+Statistics:
+`DNBR_AREA_STATISTICS`, `DNDVI_AREA_STATISTICS`, `RBR_AREA_STATISTICS`
 
-### Visual products
+## Useful Flags
 
-* `RGB_PRE_FIRE_VISUAL`
-* `RGB_POST_FIRE_VISUAL`
-* `DNDVI_VISUAL`
-* `DNBR_VISUAL`
-* `RBR_VISUAL`
+- `--days-before-after`: temporal buffer around the event window. Default: `30`
+- `--cloud-threshold`: maximum `CLOUDY_PIXEL_PERCENTAGE`. Default: `100`
+- `--fire-mosaic-strategy`: one of `best_date_mosaic`, `best_date_masked_mosaic`, `best_available_per_tile_mosaic`, `cloud_masked_light_mosaic`
+- `--roi-only`: clips visual thumbnails to the ROI footprint instead of its bounding box
 
-### Severity maps and statistics
-
-* `DNBR_AREA_STATISTICS`
-* `DNDVI_AREA_STATISTICS`
-* `RBR_AREA_STATISTICS`
-
-Example:
+Full CLI help:
 
 ```bash
-python3 -m wildfire_analyser.cli \
-   --roi polygons/ccanakkale01.geojson \
-   --start-date 2023-07-01 \
-   --end-date 2023-07-21 \
-   --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS
+./venv/bin/python -m wildfire_analyser.cli --help
 ```
 
-If `--deliverables` is **not provided**, **all available deliverables** are generated.
+## Paper Preset
 
----
-
-## Paper Preset Mode (Reproducibility)
-
-The client also supports **paper presets**, which are predefined experimental configurations designed to reproduce published results.
-
-### Example preset: `PAPER_DENIZ_FUSUN_RAMAZAN`
-
-Run:
+The CLI includes one preset for the Canakkale case study:
 
 ```bash
-python3 -m wildfire_analyser.cli \
+./venv/bin/python -m wildfire_analyser.cli \
   --deliverables PAPER_DENIZ_FUSUN_RAMAZAN
 ```
 
-This preset:
+This preset runs two predefined ROIs, produces visual outputs and statistics, and compares the computed statistics against the reference values embedded in the CLI implementation.
 
-* Executes the analysis for **two distinct burned areas**
-* Uses **paper-aligned temporal windows**
-* Generates **only visual outputs and statistics**
-* Does **not export scientific GeoTIFFs**
-* Prints results **grouped by area**
+The preset uses its own fixed internal configuration for scene selection. 
 
-Internally, it runs:
+## Notes on Methodology
 
-| Area   | ROI                       | Pre-fire   | Post-fire  |
-| ------ | ------------------------- | ---------- | ---------- |
-| Area 1 | `ccanakkale01.geojson` | 2023-07-01 | 2023-07-21 |
-| Area 2 | `ccanakkale02.geojson` | 2023-07-31 | 2023-08-30 |
+The implementation follows the same general analytical structure used in the Canakkale wildfire case study: Sentinel-2 composites, dNBR, dNDVI, RBR, severity-class statistics, and reproducible execution through a fixed workflow. For the paper preset, the intent is reproducible selection under preset-defined conditions rather than a user-adjustable temporal window. Numerical differences can still occur because of cloud filtering, mosaic strategy, and Earth Engine execution details.
 
----
+## Additional Docs
 
-## Help
-
-For help and full usage information:
-
-```bash
-python3 -m wildfire_analyser.cli --help
-```
-
-## Additional Documentation 
-
-The following documents provide more detailed and advanced guidance for
-development, environment setup, and asynchronous processing workflows.
-They are not required if the environment is already configured, but are
-recommended for first-time setup, developers, and production deployments.
-
-* **Development Guide**
-  Internal architecture, project conventions, and contribution guidelines.
-  [`docs/development.md`](docs/development.md)
-
-* **Environment & Credentials Setup**
-  Step-by-step instructions for configuring Google Earth Engine,
-  service accounts, environment variables, and Cloud Storage.
-  [`docs/environment-setup.md`](docs/environment-setup.md)
-
-* 🔧 **Asynchronous GEE Task Monitoring**
-  Detailed explanation of asynchronous scientific exports, `gee_task_id`
-  handling, and task monitoring using the standalone CLI tool.
- [`docs/gee_task_monitoring.md`](docs/gee_task_monitoring.md)
-
----
-
-### When to read these documents
-
-* Read **environment-setup.md** before running the pipeline in a new system.
-* Read **gee_task_monitoring.md** when integrating with frontend/backend
-  architectures or background workers.
-* Read **development.md** if you plan to modify or extend the codebase.
----
+- Environment setup: [`docs/environment-setup.md`](/home/marcelo/code/wildfire-analyser/docs/environment-setup.md)
+- GEE task monitoring: [`docs/gee_task_monitoring.md`](/home/marcelo/code/wildfire-analyser/docs/gee_task_monitoring.md)
+- Development notes: [`docs/development.md`](/home/marcelo/code/wildfire-analyser/docs/development.md)

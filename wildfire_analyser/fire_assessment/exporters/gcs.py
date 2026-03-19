@@ -1,28 +1,7 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2025 Marcelo Camargo.
 #
-# Google Cloud Storage (GCS) export helpers for Earth Engine products.
-#
-# This module provides helper functions to export Earth Engine images as
-# persistent artifacts to Google Cloud Storage. Exports are submitted as
-# asynchronous Earth Engine tasks and return immediately after task creation.
-#
-# Design notes:
-# - Earth Engine execution is triggered when the export task is started.
-# - Export operations are asynchronous; completion must be monitored
-#   separately via the Earth Engine task API or console.
-# - This module is intentionally limited to storage concerns and does not
-#   perform scientific processing or visualization logic.
-#
-# Responsibilities of this module:
-# - Submit GeoTIFF export tasks to Google Cloud Storage.
-# - Define export parameters (region, scale, maxPixels, format).
-# - Return stable references (GCS URL and task ID) for downstream consumers.
-#
-# Copyright (C) 2025
-# Marcelo Camargo
-#
-# This file is part of wildfire-analyser and is distributed under the terms
-# of the MIT license. See the LICENSE file for details.
+# Google Cloud Storage export helpers for Earth Engine products.
 
 
 import ee

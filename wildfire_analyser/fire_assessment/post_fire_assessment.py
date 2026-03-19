@@ -1,26 +1,7 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2025 Marcelo Camargo.
 #
 # Post-fire assessment pipeline orchestration.
-#
-# This module implements the high-level orchestration logic for post-fire
-# assessment workflows using Google Earth Engine (GEE). It coordinates the
-# execution of a dependency-based processing DAG, collects scientific,
-# statistical, and visualization deliverables, and exposes results in a
-# structured form suitable for CLI and programmatic use.
-#
-# Responsibilities of this module:
-# - Authenticate and initialize Earth Engine access.
-# - Validate user inputs (dates, ROI).
-# - Execute the processing DAG for requested deliverables.
-# - Dispatch results to visualization, statistics, or export paths.
-# - Aggregate provenance metadata for traceability.
-#
-# Copyright (C) 2025
-# Marcelo Camargo
-#
-# This file is part of wildfire-analyser and is distributed under the terms
-# of the MIT license. See the LICENSE file for details.
- 
 
 import ee
 from pathlib import Path
@@ -141,7 +122,7 @@ class PostFireAssessment:
                     "gee_task_id": export_result["gee_task_id"],
                 }
 
-        # Provenance (image IDs, dates, cloud %)
+        # Provenance metadata for image IDs, dates, and cloud percentage.
         pre_collection = self.context.get(Dependency.PRE_FIRE_COLLECTION)
         post_collection = self.context.get(Dependency.POST_FIRE_COLLECTION)
 
@@ -164,16 +145,14 @@ class PostFireAssessment:
         with open(path) as f:
             geojson = json.load(f)
         return ee.Geometry(geojson["features"][0]["geometry"])
-    
+
     @staticmethod
     def _generate_object_name(
         deliverable: str,
         start_date: str,
         end_date: str,
     ) -> str:
-        """
-        Generate a unique object name for exports.
-        """
+        """Generate a unique object name for exports."""
         ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
         uid = uuid.uuid4().hex[:8]
 
@@ -181,7 +160,7 @@ class PostFireAssessment:
         end_norm = end_date.replace("-", "_")
 
         return f"{deliverable}_{start_norm}_{end_norm}_{ts}_{uid}"
-        
+
     @staticmethod
     def _parse_date(value: str, field_name: str) -> date:
         try:
@@ -195,12 +174,11 @@ class PostFireAssessment:
     def _extract_collection_provenance(
         collection: ee.ImageCollection,
     ) -> List[Dict[str, Any]]:
-        """
-        Extract ordered image provenance from an ImageCollection.
+        """Extract ordered image provenance from an ImageCollection.
 
-        The order reflects the ImageCollection internal ordering
-        (i.e., sorted by CLOUDY_PIXEL_PERCENTAGE).
+        The result preserves the collection order returned by Earth Engine.
         """
+
         def to_feature(img):
             return ee.Feature(
                 None,

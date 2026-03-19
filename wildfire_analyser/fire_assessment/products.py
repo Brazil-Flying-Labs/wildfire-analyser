@@ -1,31 +1,7 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2025 Marcelo Camargo.
 #
 # Processing node implementations for the fire assessment pipeline.
-#
-# This module defines the concrete execution logic for each internal pipeline
-# dependency. Each function registered here represents a processing node in
-# the dependency graph and corresponds to a single, well-defined computation
-# step executed on Google Earth Engine.
-#
-# Nodes are registered via the @register decorator and are executed lazily
-# according to the dependency resolution performed by the DAG resolver.
-#
-# Design notes:
-# - Each node consumes inputs from the DAG execution context.
-# - Nodes must be deterministic and free of side effects.
-# - Earth Engine execution is deferred until a terminal operation
-#   (e.g. getInfo(), export, or thumbnail generation) is triggered.
-#
-# Responsibilities of this module:
-# - Implement all pipeline processing steps.
-# - Register execution functions for each Dependency.
-# - Encapsulate Earth Engine computation logic.
-#
-# Copyright (C) 2025
-# Marcelo Camargo.
-#
-# This file is part of wildfire-analyser and is distributed under the terms
-# of the MIT license. See the LICENSE file for details.
 
 
 from typing import Callable, Dict, Any
@@ -49,18 +25,14 @@ def register(dep: Dependency):
     return decorator
 
 
-# ─────────────────────────────
-# Stage 1 – Collection ingestion
-# ─────────────────────────────
+# Collection ingestion
 
 @register(Dependency.COLLECTION_GATHERING)
 def gather_collection_node(context):
     roi = context.inputs["roi"]
-    #cloud_threshold = context.inputs.get("cloud_threshold")
 
     return gather_collection(
         roi=roi,
-        #cloud_threshold=cloud_threshold,
     )
 
 
@@ -98,9 +70,7 @@ def build_post_fire_collection(context):
     return collection.filterDate(after_start, after_end)
 
 
-# ─────────────────────────────
-# Stage 1 – Mosaics
-# ─────────────────────────────
+# Mosaics
 
 @register(Dependency.PRE_FIRE_MOSAIC)
 def build_pre_fire_mosaic(context):
@@ -138,11 +108,12 @@ def build_post_fire_mosaic(context):
     )
 
 
+# RGB composites
+
+
 @register(Dependency.RGB_PRE_FIRE)
 def build_rgb_pre_fire(context):
-    """
-    Build RGB composite from the pre-fire mosaic.
-    """
+    """Build an RGB composite from the pre-fire mosaic."""
     mosaic = context.get(Dependency.PRE_FIRE_MOSAIC)
     if mosaic is None:
         raise RuntimeError("PRE_FIRE_MOSAIC not available in DAG context")
@@ -169,9 +140,7 @@ def build_rgb_post_fire(context):
     return rgb
 
 
-# ─────────────────────────────
-# Stage 2 – NDVI
-# ─────────────────────────────
+# NDVI
 
 @register(Dependency.NDVI_PRE_FIRE)
 def compute_ndvi_pre(context):
@@ -197,11 +166,7 @@ def compute_ndvi_post(context):
 
 @register(Dependency.DNDVI)
 def compute_dndvi(context):
-    """
-    Compute differenced NDVI (dNDVI).
-
-    dNDVI = NDVI_pre - NDVI_post
-    """
+    """Compute dNDVI as NDVI_pre - NDVI_post."""
     ndvi_pre = context.get(Dependency.NDVI_PRE_FIRE)
     ndvi_post = context.get(Dependency.NDVI_POST_FIRE)
 
@@ -211,15 +176,11 @@ def compute_dndvi(context):
     return ndvi_pre.subtract(ndvi_post).rename("dndvi")
 
 
-# ─────────────────────────────
-# Stage 2 – NBR
-# ─────────────────────────────
+# NBR
 
 @register(Dependency.NBR_PRE_FIRE)
 def compute_nbr_pre_fire(context):
-    """
-    Compute NBR from the pre-fire mosaic.
-    """
+    """Compute NBR from the pre-fire mosaic."""
     pre_fire = context.get(Dependency.PRE_FIRE_MOSAIC)
     if pre_fire is None:
         raise RuntimeError("PRE_FIRE_MOSAIC not available")
@@ -233,9 +194,7 @@ def compute_nbr_pre_fire(context):
 
 @register(Dependency.NBR_POST_FIRE)
 def compute_nbr_post_fire(context):
-    """
-    Compute NBR from the post-fire mosaic.
-    """
+    """Compute NBR from the post-fire mosaic."""
     post_fire = context.get(Dependency.POST_FIRE_MOSAIC)
     if post_fire is None:
         raise RuntimeError("POST_FIRE_MOSAIC not available")
@@ -246,17 +205,13 @@ def compute_nbr_post_fire(context):
 
     return nbr
 
-# ─────────────────────────────
-# Stage 3 – DNBR
-# ─────────────────────────────
+
+# DNBR
 
 
 @register(Dependency.DNBR)
 def compute_dnbr(context):
-    """
-    Compute differenced Normalized Burn Ratio (dNBR).
-    dNBR = NBR_pre - NBR_post
-    """
+    """Compute dNBR as NBR_pre - NBR_post."""
     nbr_pre = context.get(Dependency.NBR_PRE_FIRE)
     nbr_post = context.get(Dependency.NBR_POST_FIRE)
 
@@ -267,18 +222,12 @@ def compute_dnbr(context):
 
     return dnbr
 
-# ─────────────────────────────
-# Stage 4 – RBR
-# ─────────────────────────────
+# RBR
 
 
 @register(Dependency.RBR)
 def compute_rbr(context):
-    """
-    Compute Relative Burn Ratio (RBR).
-
-    RBR = dNBR / sqrt(|NBR_pre|)
-    """
+    """Compute RBR as dNBR / (NBR_pre + 1.001)."""
     dnbr = context.get(Dependency.DNBR)
     nbr_pre = context.get(Dependency.NBR_PRE_FIRE)
 
@@ -291,9 +240,8 @@ def compute_rbr(context):
 
     return rbr
 
-# ─────────────────────────────
-# Stage 5 – STATISTICS
-# ─────────────────────────────
+
+# Statistics
 
 
 SEVERITY_LABELS = {
@@ -306,9 +254,7 @@ SEVERITY_LABELS = {
 
 
 def format_area_statistics(stats):
-    """
-    Convert EE grouped reduce output into paper-ready statistics.
-    """
+    """Convert grouped Earth Engine output into area statistics."""
     total_area = sum(item["sum"] for item in stats)
     burned_area = sum(
         item["sum"] for item in stats if item["severity_class"] > 0
@@ -340,7 +286,7 @@ def format_area_statistics(stats):
 
 
 def compute_area_stats(severity: ee.Image, roi: ee.Geometry):
-    pixel_area = ee.Image.pixelArea().divide(10_000)  # m² → ha
+    pixel_area = ee.Image.pixelArea().divide(10_000)  # Convert m2 to ha.
 
     reducer = ee.Reducer.sum().group(
         groupField=1,

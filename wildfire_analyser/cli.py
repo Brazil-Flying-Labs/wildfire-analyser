@@ -1,39 +1,12 @@
 # SPDX-License-Identifier: MIT
+# Copyright (C) 2025 Marcelo Camargo.
 #
-# Command-line interface (CLI) entry point for wildfire-analyser.
-#
-# This module implements the command-line client used to run post-fire
-# assessments using the wildfire-analyser pipeline. It is responsible for
-# parsing user input, loading environment configuration, invoking the
-# pipeline runner, and presenting results to the user.
-#
-# The CLI supports two execution modes:
-# - Normal mode: user-specified ROI, dates, and deliverables.
-# - Paper preset mode: predefined configurations used to reproduce and
-#   validate results reported in scientific publications.
-#
-# Design notes:
-# - This file acts as an application layer, not a library component.
-# - Logging configuration is handled here to keep the core library silent
-#   by default.
-# - All scientific processing is delegated to fire_assessment modules.
-#
-# Responsibilities of this module:
-# - Parse and validate command-line arguments.
-# - Load environment variables and credentials.
-# - Orchestrate pipeline execution via PostFireAssessment.
-# - Format and report outputs for human consumption.
-#
-# Copyright (C) 2025
-# Marcelo Camargo.
-#
-# This file is part of wildfire-analyser and is distributed under the terms
-# of the MIT license. See the LICENSE file for details.
+# CLI entry point for wildfire-analyser.
+# Supports normal runs and predefined paper presets.
 
 
 import logging
 import os
-import sys
 from dotenv import load_dotenv
 import argparse
 from pathlib import Path
@@ -43,9 +16,7 @@ from wildfire_analyser.fire_assessment.deliverables import Deliverable
 from wildfire_analyser.fire_assessment.mosaic_strategies import MosaicStrategy
 
 
-# ─────────────────────────────
 # Logging setup
-# ─────────────────────────────
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 
@@ -69,9 +40,7 @@ lib_logger.setLevel(logging.WARNING)
 lib_logger.propagate = True
 
 
-# ─────────────────────────────
 # Paper preset definition
-# ─────────────────────────────
 
 PAPER_PRESETS = {
     "PAPER_DENIZ_FUSUN_RAMAZAN": {
@@ -91,26 +60,24 @@ PAPER_PRESETS = {
                 "roi": "polygons/ccanakkale01.geojson",
                 "start_date": "2023-07-01",
                 "end_date": "2023-07-21",
-                "days_before_after": 1,
+                "days_before_after": 0,
             },
             {
                 "name": "Area_2_August_Fire",
                 "roi": "polygons/ccanakkale02.geojson",
                 "start_date": "2023-07-31",
                 "end_date": "2023-08-30",
-                "days_before_after": 1,
+                "days_before_after": 0,
             },
         ],
     }
 }
 
-# ─────────────────────────────
-# Paper reference statistics (Table 7 – Sentinel-2)
+# Paper reference statistics (Table 7 - Sentinel-2)
 # Units: hectares (ha)
 # Source:
 #   "Spatial and statistical analysis of burned areas with Landsat-8/9 and
-#    Sentinel-2 satellites: 2023 Çanakkale forest fires"
-# ─────────────────────────────
+#    Sentinel-2 satellites: 2023 Canakkale forest fires"
 
 PAPER_TABLE_7_STATS = {
     "Area_1_July_Fire": {
@@ -175,11 +142,10 @@ PAPER_TABLE_7_STATS = {
 
 
 def compare_with_paper_table_7(computed: dict, reference: dict):
-    """
-    Compare computed area statistics with Table 7 reference values.
+    """Compare computed area statistics with Table 7 reference values.
 
-    Percent error is calculated relative to TOTAL AREA (paper),
-    not to the individual class area.
+    Percent error is calculated relative to the paper's total area, not to the
+    area of each individual class.
     """
     result = {}
 
@@ -206,9 +172,15 @@ def compare_with_paper_table_7(computed: dict, reference: dict):
 
     return result
 
-# ─────────────────────────────
+
+def requires_gcs_bucket(deliverables: list[Deliverable]) -> bool:
+    return any(
+        not d.name.endswith("_VISUAL")
+        and not d.name.endswith("_AREA_STATISTICS")
+        for d in deliverables
+    )
+
 # Main
-# ─────────────────────────────
 
 def main():
     load_dotenv()
@@ -218,8 +190,6 @@ def main():
         raise RuntimeError("GEE_PRIVATE_KEY_JSON not set")
 
     gcs_bucket_name = os.getenv("GCS_BUCKET_NAME")
-    if not gcs_bucket_name:
-        raise RuntimeError("GCS_BUCKET_NAME not set")
 
     parser = argparse.ArgumentParser(
         description="Post-fire assessment using Google Earth Engine"
@@ -234,7 +204,7 @@ def main():
         nargs="+",
         help=(
             "List of deliverables to generate OR a paper preset name. "
-            "Example: --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS"
+            "Example: --deliverables DNBR_VISUAL DNBR_AREA_STATISTICS "
             "or --deliverables PAPER_DENIZ_FUSUN_RAMAZAN"
         ),
     )
@@ -276,9 +246,7 @@ def main():
 
     args = parser.parse_args()
 
-    # ─────────────────────────────
-    # PAPER PRESET MODE
-    # ─────────────────────────────
+    # Paper preset mode
 
     if (
         args.deliverables
@@ -287,6 +255,12 @@ def main():
     ):
         preset_name = args.deliverables[0].upper()
         preset = PAPER_PRESETS[preset_name]
+        preset_deliverables = preset["deliverables"]
+
+        if requires_gcs_bucket(preset_deliverables) and not gcs_bucket_name:
+            raise RuntimeError(
+                "GCS_BUCKET_NAME not set for scientific deliverables"
+            )
 
         logger.info("Running paper preset: %s", preset_name)
 
@@ -311,8 +285,8 @@ def main():
                 geojson_path=str(roi_path),
                 start_date=cfg["start_date"],
                 end_date=cfg["end_date"],
-                deliverables=preset["deliverables"],
-                days_before_after=1,
+                deliverables=preset_deliverables,
+                days_before_after=cfg["days_before_after"],
                 cloud_threshold=100,
                 pre_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
                 post_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
@@ -365,15 +339,18 @@ def main():
 
     else: 
 
-        # ─────────────────────────────
-        # NORMAL MODE
-        # ─────────────────────────────
+        # Normal mode
 
         if args.deliverables:
             deliverables = [Deliverable[name.upper()]
                             for name in args.deliverables]
         else:
             deliverables = list(Deliverable)
+
+        if requires_gcs_bucket(deliverables) and not gcs_bucket_name:
+            raise RuntimeError(
+                "GCS_BUCKET_NAME not set for scientific deliverables"
+            )
 
         if not args.roi or not args.start_date or not args.end_date:
             raise ValueError("--roi, --start-date and --end-date are required")
@@ -456,27 +433,9 @@ def main():
 
     
 if __name__ == "__main__":
-    
-    ERROR_MSG = (
-        "\nERROR: Unable to process the request with the provided parameters.\n"
-        "Please check the selected time period, input files, and arguments, and try again.\n"
-    )
-    
     SUCCESS_MSG = (
         "\nSUCCESS: Request processed successfully.\n"
         "All deliverables were generated as expected.\n"
     )
-
-    # try:
     main()
     print(SUCCESS_MSG)
-
-    # # Errors intentionally raised by the library
-    # except (RuntimeError, ValueError, FileNotFoundError) as e:
-    #     print(f"\nERROR: {e}\n")
-    #     sys.exit(2)
-
-    # # Any unexpected / programming error
-    # except Exception:
-    #     print(ERROR_MSG)
-    #     sys.exit(2)

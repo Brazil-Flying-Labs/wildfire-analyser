@@ -78,7 +78,7 @@ venv/
 Required variables:
 
 * `GEE_PRIVATE_KEY_JSON` — Google Earth Engine service account credentials
-* `GCS_BUCKET_NAME` — Google Cloud Storage bucket for scientific exports (optional)
+* `GCS_BUCKET_NAME` — required only when requesting scientific deliverables exported to Google Cloud Storage
 
 ---
 
@@ -103,7 +103,7 @@ These files define the spatial extent of the analysis.
 Run the main command-line interface in development mode:
 
 ```bash
-python3 -m wildfire_analyser.cli \
+./venv/bin/python -m wildfire_analyser.cli \
   --roi polygons/canakkale_aoi_1.geojson \
   --start-date 2023-07-01 \
   --end-date 2023-07-21 \
@@ -233,4 +233,3 @@ Please also cite this repository as the reference implementation.
 
 This project is released under the **MIT License**.
 See the `LICENSE` file for details.
-
