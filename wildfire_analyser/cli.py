@@ -70,72 +70,74 @@ PAPER_PRESETS = {
                 "days_before_after": 0,
             },
         ],
-    }
+    },
 }
 
 # Paper reference statistics (Table 7 - Sentinel-2)
 # Units: hectares (ha)
 # Source:
-#   "Spatial and statistical analysis of burned areas with Landsat-8/9 and
-#    Sentinel-2 satellites: 2023 Canakkale forest fires"
+#   "Spatial and statistical analysis of burned areas: 2023 Canakkale
+#    forest fires"
 
-PAPER_TABLE_7_STATS = {
-    "Area_1_July_Fire": {
-        "DNBR_AREA_STATISTICS": {
-            "Unburned": 504.98,
-            "Low Severity": 782.86,
-            "Moderate Severity": 1194.22,
-            "High Severity": 614.84,
-            "Very High Severity": 215.18,
-            "Total Burned Area": 2807.10,
-            "Total Area": 3312.08,
+PAPER_REFERENCE_STATS = {
+    "PAPER_DENIZ_FUSUN_RAMAZAN": {
+        "Area_1_July_Fire": {
+            "DNBR_AREA_STATISTICS": {
+                "Unburned": 504.98,
+                "Low Severity": 782.86,
+                "Moderate Severity": 1194.22,
+                "High Severity": 614.84,
+                "Very High Severity": 215.18,
+                "Total Burned Area": 2807.10,
+                "Total Area": 3312.08,
+            },
+            "DNDVI_AREA_STATISTICS": {
+                "Unburned": 772.44,
+                "Low Severity": 1203.05,
+                "Moderate Severity": 698.01,
+                "High Severity": 329.38,
+                "Very High Severity": 309.20,
+                "Total Burned Area": 2539.64,
+                "Total Area": 3312.08,
+            },
+            "RBR_AREA_STATISTICS": {
+                "Unburned": 602.75,
+                "Low Severity": 1040.66,
+                "Moderate Severity": 1279.64,
+                "High Severity": 387.88,
+                "Very High Severity": 1.15,
+                "Total Burned Area": 2709.33,
+                "Total Area": 3312.08,
+            },
         },
-        "DNDVI_AREA_STATISTICS": {
-            "Unburned": 772.44,
-            "Low Severity": 1203.05,
-            "Moderate Severity": 698.01,
-            "High Severity": 329.38,
-            "Very High Severity": 309.20,
-            "Total Burned Area": 2539.64,
-            "Total Area": 3312.08,
-        },
-        "RBR_AREA_STATISTICS": {
-            "Unburned": 602.75,
-            "Low Severity": 1040.66,
-            "Moderate Severity": 1279.64,
-            "High Severity": 387.88,
-            "Very High Severity": 1.15,
-            "Total Burned Area": 2709.33,
-            "Total Area": 3312.08,
-        },
-    },
-    "Area_2_August_Fire": {
-        "DNBR_AREA_STATISTICS": {
-            "Unburned": 607.73,
-            "Low Severity": 888.34,
-            "Moderate Severity": 1229.69,
-            "High Severity": 937.45,
-            "Very High Severity": 781.82,
-            "Total Burned Area": 3837.3,
-            "Total Area": 4445.03,
-        },
-        "DNDVI_AREA_STATISTICS": {
-            "Unburned": 1075.14,
-            "Low Severity": 940.87,
-            "Moderate Severity": 703.67,
-            "High Severity": 681.89,
-            "Very High Severity": 1043.46,
-            "Total Burned Area": 3369.89,
-            "Total Area": 4445.03,
-        },
-        "RBR_AREA_STATISTICS": {
-            "Unburned": 687.17,
-            "Low Severity": 1248.86,
-            "Moderate Severity": 1378.75,
-            "High Severity": 1128.05,
-            "Very High Severity": 2.20,
-            "Total Burned Area": 3757.86,
-            "Total Area": 4445.03,
+        "Area_2_August_Fire": {
+            "DNBR_AREA_STATISTICS": {
+                "Unburned": 607.73,
+                "Low Severity": 888.34,
+                "Moderate Severity": 1229.69,
+                "High Severity": 937.45,
+                "Very High Severity": 781.82,
+                "Total Burned Area": 3837.3,
+                "Total Area": 4445.03,
+            },
+            "DNDVI_AREA_STATISTICS": {
+                "Unburned": 1075.14,
+                "Low Severity": 940.87,
+                "Moderate Severity": 703.67,
+                "High Severity": 681.89,
+                "Very High Severity": 1043.46,
+                "Total Burned Area": 3369.89,
+                "Total Area": 4445.03,
+            },
+            "RBR_AREA_STATISTICS": {
+                "Unburned": 687.17,
+                "Low Severity": 1248.86,
+                "Moderate Severity": 1378.75,
+                "High Severity": 1128.05,
+                "Very High Severity": 2.20,
+                "Total Burned Area": 3757.86,
+                "Total Area": 4445.03,
+            },
         },
     },
 }
@@ -180,6 +182,15 @@ def requires_gcs_bucket(deliverables: list[Deliverable]) -> bool:
         for d in deliverables
     )
 
+
+def validate_roi_only_args(args):
+    if (
+        args.roi_only_bg_color is not None
+        and not args.roi_only
+    ):
+        raise ValueError(
+            "--roi-only-bg-color is only valid when --roi-only is also provided"
+        )
 # Main
 
 def main():
@@ -220,10 +231,7 @@ def main():
         "--cloud-threshold",
         type=int,
         default=100,
-        help=(
-            "Maximum allowed CLOUDY_PIXEL_PERCENTAGE for Sentinel-2 scenes "
-            "(default: 100). Higher values include more cloudy scenes."
-        ),
+        help="Maximum allowed scene cloud percentage (default: 100).",
     )
     parser.add_argument(
         "--fire-mosaic-strategy",
@@ -243,8 +251,20 @@ def main():
             "outside the ROI."
         ),
     )
+    parser.add_argument(
+        "--roi-only-bg-color",
+        default=None,
+        help=(
+            "Background color outside the ROI when --roi-only is enabled "
+            "(default: black). Accepts values such as 'black', 'white', "
+            "or hex colors like '#ffffff'."
+        ),
+    )
 
     args = parser.parse_args()
+    validate_roi_only_args(args)
+
+    roi_only_bg_color = args.roi_only_bg_color or "black"
 
     # Paper preset mode
 
@@ -256,7 +276,6 @@ def main():
         preset_name = args.deliverables[0].upper()
         preset = PAPER_PRESETS[preset_name]
         preset_deliverables = preset["deliverables"]
-
         if requires_gcs_bucket(preset_deliverables) and not gcs_bucket_name:
             raise RuntimeError(
                 "GCS_BUCKET_NAME not set for scientific deliverables"
@@ -291,11 +310,36 @@ def main():
                 pre_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
                 post_fire_mosaic_strategy = MosaicStrategy.BEST_DATE_MASKED_MOSAIC,
                 roi_only=args.roi_only,
+                roi_only_bg_color=roi_only_bg_color,
                 gcs_bucket=gcs_bucket_name,
                 verbose=True,
             )
 
             result = runner.run()
+
+            prov = result.get("provenance", {})
+
+            pre_fire_images = prov.get("pre_fire", {}).get("images", [])
+            if pre_fire_images:
+                logger.info("Pre-fire images used:")
+                for img in pre_fire_images:
+                    logger.info(
+                        "  %s | %s | cloud=%.1f",
+                        img["date"],
+                        img["id"],
+                        img["cloud_percent"],
+                    )
+
+            post_fire_images = prov.get("post_fire", {}).get("images", [])
+            if post_fire_images:
+                logger.info("Post-fire images used:")
+                for img in post_fire_images:
+                    logger.info(
+                        "  %s | %s | cloud=%.1f",
+                        img["date"],
+                        img["id"],
+                        img["cloud_percent"],
+                    )
 
             logger.info("Visual outputs:")
             for name, item in result["visual"].items():
@@ -304,7 +348,8 @@ def main():
             logger.info("Statistics:")
             for stat_name, stat_value in result["statistics"].items():
                 paper_ref = (
-                    PAPER_TABLE_7_STATS
+                    PAPER_REFERENCE_STATS
+                    .get(preset_name, {})
                     .get(cfg["name"], {})
                     .get(stat_name)
                 )
@@ -366,10 +411,11 @@ def main():
             end_date=args.end_date,
             days_before_after=args.days_before_after,
             cloud_threshold=args.cloud_threshold,
-            deliverables=deliverables, 
+            deliverables=deliverables,
             pre_fire_mosaic_strategy=args.fire_mosaic_strategy,
             post_fire_mosaic_strategy=args.fire_mosaic_strategy,
             roi_only=args.roi_only,
+            roi_only_bg_color=roi_only_bg_color,
             gcs_bucket=gcs_bucket_name,
             verbose=True,
         )

@@ -8,6 +8,11 @@ import ee
 
 from enum import Enum
 
+from wildfire_analyser.fire_assessment.sentinel2 import (
+    add_quality_band,
+    mask_invalid_pixels,
+)
+
 
 class MosaicStrategy(str, Enum):
     """Public-facing mosaic strategy identifiers."""
@@ -59,7 +64,7 @@ def best_date_mosaic(
     filtered = collection
     if cloud_threshold is not None:
         filtered = filtered.filter(
-            ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold)
+            ee.Filter.lte("CLOUD_PERCENTAGE", cloud_threshold)
         )
 
     # Derive the sensing date (YYYY-MM-dd).
@@ -70,7 +75,7 @@ def best_date_mosaic(
     dated = filtered.map(add_date)
 
     # Pick the best image to identify the target date.
-    best_image = dated.sort("CLOUDY_PIXEL_PERCENTAGE").first()
+    best_image = dated.sort("CLOUD_PERCENTAGE").first()
     best_date = best_image.get("sensing_date")
 
     # Rebuild the collection using all tiles from that date.
@@ -87,44 +92,16 @@ def cloud_masked_light_mosaic(
 ) -> ee.Image:
     """Build a pixel-based mosaic using cloud probability as a quality weight."""
 
-    def _mask_scl_light(image: ee.Image) -> ee.Image:
-        scl = image.select("SCL")
-
-        # Mask only clearly invalid observations.
-        invalid = (
-            scl.eq(1)
-            .Or(scl.eq(3))   # Cloud shadow
-            .Or(scl.eq(9))   # High probability cloud
-            .Or(scl.eq(10))  # Cirrus
-        )
-        return image.updateMask(invalid.Not())
-
     def _pixel_mosaic_by_cloud_prob(
         collection: ee.ImageCollection,
     ) -> ee.Image:
-
-        def add_quality(image: ee.Image) -> ee.Image:
-            prob = image.select("MSK_CLDPRB")
-            scl = image.select("SCL")
-
-            # Higher quality corresponds to lower cloud probability.
-            quality = ee.Image(100).subtract(prob)
-
-            # Penalize cloud edges without fully masking them.
-            quality = quality.where(
-                scl.eq(8),
-                quality.subtract(5)
-            )
-
-            return image.addBands(quality.rename("quality"))
-
         return (
             collection
-            .map(add_quality)
+            .map(add_quality_band)
             .qualityMosaic("quality")
         )
 
-    masked = collection.map(_mask_scl_light)
+    masked = collection.map(mask_invalid_pixels)
     mosaic = _pixel_mosaic_by_cloud_prob(masked)
 
     # Remove the auxiliary quality band from the output.
@@ -137,23 +114,8 @@ def best_date_masked_mosaic(
     collection: ee.ImageCollection,
     context,
 ) -> ee.Image:
-    """Apply SCL masking to the best-date mosaic."""
-
-    def _mask_scl(image: ee.Image) -> ee.Image:
-        """Mask physically invalid pixels using the SCL band."""
-
-        scl = image.select("SCL")
-
-        invalid = (
-            scl.eq(1)        # Saturated / defective
-            .Or(scl.eq(3))   # Cloud shadow
-            .Or(scl.eq(9))   # Cloud high probability
-            .Or(scl.eq(10))  # Cirrus
-        )
-
-        return image.updateMask(invalid.Not())
-
-    return _mask_scl(best_date_mosaic(collection, context))
+    """Apply invalid-pixel masking to the best-date mosaic."""
+    return mask_invalid_pixels(best_date_mosaic(collection, context))
 
 
 def best_available_per_tile_mosaic(
@@ -167,16 +129,16 @@ def best_available_per_tile_mosaic(
     filtered = collection
     if cloud_threshold is not None:
         filtered = filtered.filter(
-            ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold)
+            ee.Filter.lte("CLOUD_PERCENTAGE", cloud_threshold)
         )
 
-    tiles = ee.List(filtered.aggregate_array("MGRS_TILE")).distinct()
+    tiles = ee.List(filtered.aggregate_array("SPATIAL_TILE_ID")).distinct()
 
     def select_best_for_tile(tile_id):
         tile_collection = (
             filtered
-            .filter(ee.Filter.eq("MGRS_TILE", tile_id))
-            .sort("CLOUDY_PIXEL_PERCENTAGE")
+            .filter(ee.Filter.eq("SPATIAL_TILE_ID", tile_id))
+            .sort("CLOUD_PERCENTAGE")
         )
         return ee.Image(tile_collection.first())
 

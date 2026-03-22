@@ -10,7 +10,7 @@ import ee
 def rbr_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
     # Paper-style threshold classification.
     classified = (
-        ee.Image(0)  # Unburned
+        ee.Image(0).updateMask(image.mask())  # Unburned
         .where(image.gte(0.10).And(image.lt(0.27)), 1)   # Low
         .where(image.gte(0.27).And(image.lt(0.44)), 2)  # Moderate
         .where(image.gte(0.44).And(image.lt(0.66)), 3)  # High

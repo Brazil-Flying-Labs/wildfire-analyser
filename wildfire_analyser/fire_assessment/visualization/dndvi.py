@@ -10,7 +10,7 @@ import ee
 def dndvi_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
     # Paper Table 5 thresholds normalized to contiguous intervals.
     classified = (
-        ee.Image(0)  # Unburned (< 0.07)
+        ee.Image(0).updateMask(image.mask())  # Unburned (< 0.07)
         .where(image.gte(0.07).And(image.lt(0.20)), 1)   # Low
         .where(image.gte(0.20).And(image.lt(0.33)), 2)   # Moderate
         .where(image.gte(0.33).And(image.lt(0.45)), 3)   # High

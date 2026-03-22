@@ -16,6 +16,7 @@ from wildfire_analyser.fire_assessment.resolver import (
 )
 from wildfire_analyser.fire_assessment.deliverables import Deliverable
 from wildfire_analyser.fire_assessment.mosaic_strategies import MosaicStrategy
+from wildfire_analyser.fire_assessment.sentinel2 import native_scale_meters
 from wildfire_analyser.fire_assessment.visualization import VISUAL_RENDERERS
 from wildfire_analyser.fire_assessment.exporters.gcs import (
     export_geotiff_to_gcs,
@@ -30,8 +31,6 @@ import logging
 
 class PostFireAssessment:
 
-    DEFAULT_SCALE = 10
-
     def __init__(
         self,
         gee_key_json: str,
@@ -44,6 +43,7 @@ class PostFireAssessment:
         pre_fire_mosaic_strategy: str = MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC,  
         post_fire_mosaic_strategy: str = MosaicStrategy.BEST_AVAILABLE_PER_TILE_MOSAIC,
         roi_only: bool = False,
+        roi_only_bg_color: str = "black",
         gcs_bucket: str | None = None,
         verbose: bool = False,
     ):
@@ -64,6 +64,8 @@ class PostFireAssessment:
         self.deliverables = deliverables
         self.bucket = gcs_bucket
         self.roi_only = roi_only
+        self.roi_only_bg_color = roi_only_bg_color
+        self.default_scale = native_scale_meters()
 
         self.context = DAGExecutionContext(
             roi=self.roi,
@@ -98,6 +100,7 @@ class PostFireAssessment:
                         vis,
                         self.roi,
                         roi_only=self.roi_only,
+                        roi_only_bg_color=self.roi_only_bg_color,
                     )
                 }
                 continue
@@ -114,7 +117,7 @@ class PostFireAssessment:
                     roi=self.roi,
                     bucket=self.bucket,
                     object_name=object_name,
-                    scale=self.DEFAULT_SCALE,
+                    scale=self.default_scale,
                 )
 
                 result["scientific"][d.name] = {
@@ -187,7 +190,9 @@ class PostFireAssessment:
                     "date": ee.Date(
                         img.get("system:time_start")
                     ).format("YYYY-MM-dd"),
-                    "cloud_percent": img.get("CLOUDY_PIXEL_PERCENTAGE"),
+                    "cloud_percent": img.get("CLOUD_PERCENTAGE"),
+                    "spacecraft_id": img.get("SPACECRAFT_ID"),
+                    "spacecraft_name": img.get("SPACECRAFT_NAME"),
                 },
             )
 

@@ -9,9 +9,12 @@ import ee
 
 from wildfire_analyser.fire_assessment.dependencies import Dependency
 from wildfire_analyser.fire_assessment.time_windows import compute_fire_time_windows
-from wildfire_analyser.fire_assessment.sentinel2 import gather_collection
 from wildfire_analyser.fire_assessment.mosaic_strategies import (
     apply_mosaic_strategy,
+)
+from wildfire_analyser.fire_assessment.sentinel2 import (
+    gather_collection,
+    native_scale_meters,
 )
 
 ProductExecutor = Callable[[Any], Any]
@@ -30,10 +33,7 @@ def register(dep: Dependency):
 @register(Dependency.COLLECTION_GATHERING)
 def gather_collection_node(context):
     roi = context.inputs["roi"]
-
-    return gather_collection(
-        roi=roi,
-    )
+    return gather_collection(roi=roi)
 
 
 @register(Dependency.PRE_FIRE_COLLECTION)
@@ -118,12 +118,7 @@ def build_rgb_pre_fire(context):
     if mosaic is None:
         raise RuntimeError("PRE_FIRE_MOSAIC not available in DAG context")
 
-    rgb = mosaic.select(
-        ["B4_refl", "B3_refl", "B2_refl"],
-        ["red", "green", "blue"],
-    )
-
-    return rgb
+    return mosaic.select(["RED_refl", "GREEN_refl", "BLUE_refl"])
 
 
 @register(Dependency.RGB_POST_FIRE)
@@ -132,12 +127,7 @@ def build_rgb_post_fire(context):
     if mosaic is None:
         raise RuntimeError("POST_FIRE_MOSAIC not available in DAG context")
 
-    rgb = mosaic.select(
-        ["B4_refl", "B3_refl", "B2_refl"],
-        ["red", "green", "blue"],
-    )
-
-    return rgb
+    return mosaic.select(["RED_refl", "GREEN_refl", "BLUE_refl"])
 
 
 # NDVI
@@ -148,9 +138,7 @@ def compute_ndvi_pre(context):
     if pre_fire is None:
         raise RuntimeError("PRE_FIRE_MOSAIC not available")
 
-    return pre_fire.normalizedDifference(
-        ["B8_refl", "B4_refl"]
-    ).rename("ndvi")
+    return pre_fire.normalizedDifference(["NIR_refl", "RED_refl"]).rename("ndvi")
 
 
 @register(Dependency.NDVI_POST_FIRE)
@@ -159,9 +147,7 @@ def compute_ndvi_post(context):
     if post_fire is None:
         raise RuntimeError("POST_FIRE_MOSAIC not available")
 
-    return post_fire.normalizedDifference(
-        ["B8_refl", "B4_refl"]
-    ).rename("ndvi")
+    return post_fire.normalizedDifference(["NIR_refl", "RED_refl"]).rename("ndvi")
 
 
 @register(Dependency.DNDVI)
@@ -185,9 +171,7 @@ def compute_nbr_pre_fire(context):
     if pre_fire is None:
         raise RuntimeError("PRE_FIRE_MOSAIC not available")
 
-    nbr = pre_fire.normalizedDifference(
-        ["B8_refl", "B12_refl"]
-    ).rename("nbr")
+    nbr = pre_fire.normalizedDifference(["NIR_refl", "SWIR2_refl"]).rename("nbr")
 
     return nbr
 
@@ -199,9 +183,7 @@ def compute_nbr_post_fire(context):
     if post_fire is None:
         raise RuntimeError("POST_FIRE_MOSAIC not available")
 
-    nbr = post_fire.normalizedDifference(
-        ["B8_refl", "B12_refl"]
-    ).rename("nbr")
+    nbr = post_fire.normalizedDifference(["NIR_refl", "SWIR2_refl"]).rename("nbr")
 
     return nbr
 
@@ -285,7 +267,11 @@ def format_area_statistics(stats):
     return result
 
 
-def compute_area_stats(severity: ee.Image, roi: ee.Geometry):
+def compute_area_stats(
+    severity: ee.Image,
+    roi: ee.Geometry,
+    scale_meters: int,
+):
     pixel_area = ee.Image.pixelArea().divide(10_000)  # Convert m2 to ha.
 
     reducer = ee.Reducer.sum().group(
@@ -299,7 +285,7 @@ def compute_area_stats(severity: ee.Image, roi: ee.Geometry):
         .reduceRegion(
             reducer=reducer,
             geometry=roi,
-            scale=10,
+            scale=scale_meters,
             maxPixels=1e13,
         )
         .get("groups")
@@ -314,12 +300,13 @@ def compute_area_stats(severity: ee.Image, roi: ee.Geometry):
 def compute_dnbr_area_statistics(context):
     dnbr = context.get(Dependency.DNBR)
     roi = context.inputs["roi"]
+    scale_meters = native_scale_meters()
 
     if dnbr is None:
         raise RuntimeError("DNBR not available")
 
     severity = (
-        ee.Image(0)
+        ee.Image(0).updateMask(dnbr.mask())
         .where(dnbr.gte(0.10).And(dnbr.lt(0.27)), 1)
         .where(dnbr.gte(0.27).And(dnbr.lt(0.44)), 2)
         .where(dnbr.gte(0.44).And(dnbr.lt(0.66)), 3)
@@ -328,38 +315,40 @@ def compute_dnbr_area_statistics(context):
         .toInt8()
     )
 
-    return compute_area_stats(severity, roi)
+    return compute_area_stats(severity, roi, scale_meters)
 
 
 @register(Dependency.DNDVI_AREA_STATISTICS)
 def compute_dndvi_area_statistics(context):
     dndvi = context.get(Dependency.DNDVI)
     roi = context.inputs["roi"]
+    scale_meters = native_scale_meters()
 
     if dndvi is None:
         raise RuntimeError("DNDVI not available")
 
     severity = (
-        ee.Image(0)  # Unburned: dNDVI < 0.07
+        ee.Image(0).updateMask(dndvi.mask())  # Unburned: dNDVI < 0.07
         .where(dndvi.gte(0.07).And(dndvi.lt(0.20)), 1)  # Low
         .where(dndvi.gte(0.20).And(dndvi.lt(0.33)), 2)  # Moderate
         .where(dndvi.gte(0.33).And(dndvi.lt(0.45)), 3)  # High
         .where(dndvi.gte(0.45), 4)                      # Very High
     )
 
-    return compute_area_stats(severity, roi)
+    return compute_area_stats(severity, roi, scale_meters)
 
 
 @register(Dependency.RBR_AREA_STATISTICS)
 def compute_rbr_area_statistics(context):
     rbr = context.get(Dependency.RBR)
     roi = context.inputs["roi"]
+    scale_meters = native_scale_meters()
 
     if rbr is None:
         raise RuntimeError("RBR not available")
 
     severity = (
-        ee.Image(0)
+        ee.Image(0).updateMask(rbr.mask())
         .where(rbr.gte(0.10).And(rbr.lt(0.27)), 1)
         .where(rbr.gte(0.27).And(rbr.lt(0.44)), 2)
         .where(rbr.gte(0.44).And(rbr.lt(0.66)), 3)
@@ -368,4 +357,4 @@ def compute_rbr_area_statistics(context):
         .toInt8()
     )
 
-    return compute_area_stats(severity, roi)
+    return compute_area_stats(severity, roi, scale_meters)

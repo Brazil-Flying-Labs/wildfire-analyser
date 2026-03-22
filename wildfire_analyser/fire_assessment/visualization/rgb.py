@@ -17,7 +17,7 @@ def _outline(roi):
 
 def rgb_pre_fire_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
     vis = image.visualize(
-        bands=["red", "green", "blue"],
+        bands=["RED_refl", "GREEN_refl", "BLUE_refl"],
         min=0.02,
         max=0.30,
         gamma=1.2,
@@ -27,7 +27,7 @@ def rgb_pre_fire_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
 
 def rgb_post_fire_visual(image: ee.Image, roi: ee.Geometry) -> ee.Image:
     vis = image.visualize(
-        bands=["red", "green", "blue"],
+        bands=["RED_refl", "GREEN_refl", "BLUE_refl"],
         min=0.02,
         max=0.30,
         gamma=1.2,

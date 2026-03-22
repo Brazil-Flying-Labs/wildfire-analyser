@@ -219,11 +219,9 @@ twine upload dist/*
 
 ## Citation
 
-If you use this software for scientific or academic work, please cite:
-
-> *Spatial and statistical analysis of burned areas with Landsat-8/9 and
-> Sentinel-2 satellites: 2023 Çanakkale forest fires*
-> Deniz Bitek, Fusun Balik Sanli, Ramazan Cuneyt Erenoglu.
+If you use this software for scientific or academic work, please cite the
+Çanakkale forest fires paper by Deniz Bitek, Fusun Balik Sanli, and Ramazan
+Cuneyt Erenoglu.
 
 Please also cite this repository as the reference implementation.
 

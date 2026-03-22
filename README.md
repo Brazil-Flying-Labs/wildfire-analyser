@@ -63,6 +63,7 @@ Example with more outputs:
 ```
 
 If `--deliverables` is omitted, the CLI requests every deliverable defined in [`wildfire_analyser/fire_assessment/deliverables.py`](/home/marcelo/code/wildfire-analyser/wildfire_analyser/fire_assessment/deliverables.py).
+That includes scientific exports, so `GCS_BUCKET_NAME` becomes required in that case.
 
 ## Deliverables
 
@@ -78,9 +79,10 @@ Statistics:
 ## Useful Flags
 
 - `--days-before-after`: temporal buffer around the event window. Default: `30`
-- `--cloud-threshold`: maximum `CLOUDY_PIXEL_PERCENTAGE`. Default: `100`
-- `--fire-mosaic-strategy`: one of `best_date_mosaic`, `best_date_masked_mosaic`, `best_available_per_tile_mosaic`, `cloud_masked_light_mosaic`
+- `--cloud-threshold`: maximum allowed scene cloud percentage. Default: `100`
+- `--fire-mosaic-strategy`: one of `best_date_mosaic`, `best_date_masked_mosaic`, `best_available_per_tile_mosaic`, `cloud_masked_light_mosaic`. Default: `best_available_per_tile_mosaic`
 - `--roi-only`: clips visual thumbnails to the ROI footprint instead of its bounding box
+- `--roi-only-bg-color`: background color outside the ROI when `--roi-only` is used. Default: `black`
 
 Full CLI help:
 
