@@ -47,6 +47,21 @@ def _build_background_image(color: str) -> ee.Image:
     return ee.Image.constant([red, green, blue]).toByte()
 
 
+def _roi_outline_palette(color: str) -> list[str]:
+    red, green, blue = _parse_background_color(color)
+    luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+    return ["000000"] if luminance >= 128 else ["ffffff"]
+
+
+def _build_roi_outline(roi: ee.Geometry, color: str) -> ee.Image:
+    outline = ee.Image().byte().paint(
+        featureCollection=ee.FeatureCollection(roi),
+        color=1,
+        width=4,
+    )
+    return outline.visualize(palette=_roi_outline_palette(color))
+
+
 def get_visual_thumbnail_url(
     image: ee.Image,
     roi: ee.Geometry,
@@ -60,6 +75,8 @@ def get_visual_thumbnail_url(
         image = background.blend(image.clip(roi))
     else:
         image = image.clip(bounds)
+
+    image = image.blend(_build_roi_outline(roi, roi_only_bg_color))
 
     return image.getThumbURL({
         "dimensions": 1024,
